@@ -1,31 +1,31 @@
-//ino
+*//ino*
 read rfid card
 get card uid
 send uid to py
-//py
+*//py*
 check the card uid
- if uid in valid_uids list:
-   if uid in canvote_uids list:
+ **if** uid in valid_uids list:
+   **if** uid in canvote_uids list:
       find voter's photo and name and print on the screen
-      ("{NAME} CAN VOTE"}
-      return to ino that voter canVote = "OK"
-   else if uid not in canvote_uids list:
+      *("{NAME} CAN VOTE")*
+      **return** to ino that voter canVote = "OK"
+   **else** if uid not in canvote_uids list:
       print voter's photo and name along with an error mesage on the screen
-      ("THE VOTER HAS VOTED BEFORE!")
-      return to ino that voter canVote = "VOTED"
- else:
-  print warning message ("CARD COULDN'T BE IDENTIFIED")
+      *("THE VOTER HAS VOTED BEFORE!")*
+      **return** to ino that voter canVote = "VOTED"
+ **else:**
+  print warning message *("CARD COULDN'T BE IDENTIFIED")*
   return to ino to repeat card reading canVote = "NOTFOUND"
   
 wait (loop) until a new serial message is recieved
-//ino
-start ino getVote() script
+*//ino*
+start ino **getVote()** script
 get voter's choice with buttons
 send vote data to py
-//py
+*//py*
 store vote data and mark voter as voted(remove uid from canvote_uids list
 return "done" to ino
-//ino
+*//ino*
 restart the ino script
 wait for a new rfid card
   
