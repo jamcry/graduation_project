@@ -142,9 +142,41 @@ def runTest(td):
 
 import serial
 import time
+import shelve # shelve module is used to read variables from saved database in hdd
+import os # for future uses to check if path is correct etc.
+import sys
 
-uids = ["25673" , "14805"]
-votedUids = ["-19914"]
+# this script can be called as 'python uid-comm.py -reset'
+# to reset database (THIS REMOVES ALL SAVED DATA !)
+try:
+    if(str(sys.argv[1]) == '-reset'):
+        dbs = shelve.open('uid_data')
+        dbs['votedUids'] = []
+        dbs['votedUids'] = []
+        dbs.close()
+        print "="*10
+        print " ** DATABASE IS RESET **"
+        print "="*10
+        print "arg 1 : " , str(sys.argv[1])
+except IndexError:
+    x=0
+        # do nothing if no argument is written in commandline
+
+
+dbShelfFile = shelve.open('uid_data')
+# TODO uids and corresp. names can be combined with a dictionary !
+allUids = dbShelfFile['allUids']
+print( " == ALL UIDS : " , allUids)
+nameDict = dbShelfFile['nameDict']
+
+votedUids = dbShelfFile['votedUids']
+
+# TODO yes and no counts can be combined with a dictionary !
+yesCount = dbShelfFile['yesCount']
+noCount = dbShelfFile['noCount']
+dbShelfFile.close()
+
+
 # NOTE the user must ensure that the serial port and baudrate are correct
 serialPort = "/dev/ttyUSB0"
 baudRate = 9600
@@ -156,24 +188,46 @@ print "Serial port " + serialPort + " opened  Baudrate " + str(baudRate)
 
 uidLine = ser.readline()
 print ("-" + uidLine + "-")
-cardUID = (uidLine.split("\n"))[0]
-print("waited for arduino")
+cardUID = int((uidLine.split("\n"))[0])
+print "waited for arduino"
+print " >> CARD UID:" , cardUID
 
+if cardUID in allUids: # if card uid is in defined uids list
+    voterName = nameDict[cardUID]
+    print " WELCOME " , voterName
 
-if cardUID in uids:
-    ser.write('Y')
-    uids.remove(cardUID)
-    votedUids.append(cardUID)
-    print("CAN VOTE")
-    while(ser.readline() == uidLine): # wait until a new serial data is present
-        voteLine = ser.readline()
-        print("voteLine: " , voteLine)
-        vote = (voteLine.split('\n'))[0]
-        print("VOTE: " + vote)
+    if cardUID in votedUids: # if uid has already voted
+        print " !! YOU HAVE ALREADY VOTED !!"
+        ser.write('N') # N : can not vote
 
-elif cardUID in votedUids:
-    ser.write('N')
-    print("CANNOT VOTE")
-else:
+    else: # if uid hasn't voted yet
+        ser.write('Y')
+        votedUids.append(cardUID)
+        print(" + CAN VOTE")
+        print(" * Waiting for vote ...")
+        while(ser.readline() == uidLine): # wait until a new serial data is present
+            voteLine = ser.readline()
+            print("voteLine: " , voteLine)
+            vote = (voteLine.split('\n'))[0]
+            print("VOTE: " + vote)
+            if(vote == 'YES'):
+                print(" >> YES selected")
+                yesCount += 1
+                votedUids.append(cardUID)
+            elif(vote == 'NO'):
+                print(" >> NO selected")
+                noCount += 1
+                votedUids.append(cardUID)
+            else:
+                print(" >> SELECTION IS INVALID")
+
+else: # if card uid is not defined
     ser.write('E')
     print("error")
+
+dbShelfFile = shelve.open('uid_data')
+dbShelfFile['allUids'] = allUids
+dbShelfFile['votedUids'] = votedUids
+dbShelfFile['yesCount'] = yesCount
+dbShelfFile['noCount'] = noCount
+dbShelfFile.close()
