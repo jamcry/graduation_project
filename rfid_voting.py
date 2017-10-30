@@ -145,36 +145,96 @@ import time
 import shelve # shelve module is used to read variables from saved database in hdd
 import os # for future uses to check if path is correct etc.
 import sys
+from Tkinter import *
+import tkMessageBox
+import thread
 
 # this script can be called as 'python uid-comm.py -reset'
+
 # to reset database (THIS REMOVES ALL SAVED DATA !)
 try:
-    if(str(sys.argv[1]) == '-reset'):
+    cmdArg = str(sys.argv[1])
+    if(cmdArg == '-reset'):
         dbs = shelve.open('uid_data')
         dbs['votedUids'] = []
-        dbs['votedUids'] = []
+        dbs['voteCounts'] = {'yes':0,'no':0}
         dbs.close()
         print "="*10
         print " ** DATABASE IS RESET **"
         print "="*10
         print "arg 1 : " , str(sys.argv[1])
+    elif(cmdArg == '-showDb'):
+        dbs = shelve.open('uid_data')
+        print "="*15
+        print " > VOTED LIST : " , dbs['votedUids']
+        print " > COUNTS     : " , dbs['voteCounts']
+        if(len(dbs['votedUids']) == len(dbs['uidsNames'].keys())):
+            yesCount = dbs['voteCounts']['yes']
+            noCount = dbs['voteCounts']['no']
+            if(yesCount > noCount):
+                print " >> YES WIN"
+            elif(noCount > yesCount):
+                print " >> VOTING FINISHED : NO WINS"
+            else:
+                print " >> DRAW"
+            sys.exit(0)
+        print "="*15
+        dbs.close()
 except IndexError:
     x=0
         # do nothing if no argument is written in commandline
 
 
 dbShelfFile = shelve.open('uid_data')
-# TODO uids and corresp. names can be combined with a dictionary !
-allUids = dbShelfFile['allUids']
+# if all registered uids has voted, exit program
+if(len(dbShelfFile['votedUids']) == len(dbShelfFile['uidsNames'].keys())):
+    print("VOTING HAS FINISHED")
+    sys.exit(0)
+
+uidNameDict = dbShelfFile['uidsNames']
+allUids = uidNameDict.keys()
 print( " == ALL UIDS : " , allUids)
-nameDict = dbShelfFile['nameDict']
+
+name = dbShelfFile['uidsNames'].values()
 
 votedUids = dbShelfFile['votedUids']
 
-# TODO yes and no counts can be combined with a dictionary !
-yesCount = dbShelfFile['yesCount']
-noCount = dbShelfFile['noCount']
+voteCounts = dbShelfFile['voteCounts']
+yesCount = voteCounts['yes']
+noCount = voteCounts['no']
+
 dbShelfFile.close()
+
+def showGuiMsg(msg , cardUID , voterName):
+    master = Tk()
+    imgPath = str(cardUID) + ".png"
+    name = voterName
+    img = PhotoImage(file=imgPath)
+    imgPanel = Label(master , image = img)
+    if(msg=="voted"):
+        nameMsgText = "YOU HAVE ALREADY VOTED\n" + name
+    elif(msg=="canVote"):
+        nameMsgText = "YOU CAN VOTE\n" + name
+    nameMsg = Message(master , text=nameMsgText , width=550, anchor=CENTER)
+    nameMsg.config(bg='white' , font=( 48 ) , anchor=CENTER)
+    imgPanel.pack()
+    nameMsg.pack()
+
+    if(msg=="voted"):
+        # if voter has already voted , show the screen until
+        # OK button is pressed
+        okButton = Button(master , text="OK" , command=master.quit)
+        okButton.pack()
+
+    if(msg=="canVote"):
+        # TODO: this if prevents tk screen blocking the code to run
+        # in the background. It seems to be not working sometimes.
+        # should be improved :
+        # check : https://gordonlesti.com/use-tkinter-without-mainloop/
+        master.after(100,master.quit)
+        # it shows GUI until the person votes
+
+    master.mainloop()
 
 
 # NOTE the user must ensure that the serial port and baudrate are correct
@@ -193,16 +253,18 @@ print "waited for arduino"
 print " >> CARD UID:" , cardUID
 
 if cardUID in allUids: # if card uid is in defined uids list
-    voterName = nameDict[cardUID]
+    voterName = uidNameDict[cardUID]
     print " WELCOME " , voterName
 
     if cardUID in votedUids: # if uid has already voted
+        showGuiMsg("voted" , cardUID,voterName)
+        #showVotedWarning(cardUID,voterName)
         print " !! YOU HAVE ALREADY VOTED !!"
         ser.write('N') # N : can not vote
 
     else: # if uid hasn't voted yet
+        showGuiMsg("canVote" ,cardUID,voterName)
         ser.write('Y')
-        votedUids.append(cardUID)
         print(" + CAN VOTE")
         print(" * Waiting for vote ...")
         while(ser.readline() == uidLine): # wait until a new serial data is present
@@ -226,8 +288,8 @@ else: # if card uid is not defined
     print("error")
 
 dbShelfFile = shelve.open('uid_data')
-dbShelfFile['allUids'] = allUids
 dbShelfFile['votedUids'] = votedUids
-dbShelfFile['yesCount'] = yesCount
-dbShelfFile['noCount'] = noCount
+voteCounts['yes']=yesCount
+voteCounts['no']=noCount
+dbShelfFile['voteCounts'] = voteCounts
 dbShelfFile.close()
