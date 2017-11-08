@@ -5,20 +5,55 @@
 #include <require_cpp11.h>
 #include <MFRC522.h>
 #include <SPI.h>
+#include <Wire.h>
+#include <LCD.h>
+#include <LiquidCrystal_I2C.h>
+
+#define I2C_ADDR    0x27 // <<----- Add your address here.  Find it from I2C Scanner
+#define BACKLIGHT_PIN     3
+#define En_pin  2
+#define Rw_pin  1
+#define Rs_pin  0
+#define D4_pin  4
+#define D5_pin  5
+#define D6_pin  6
+#define D7_pin  7
+LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
 
 #define SS_PIN 10
 #define RST_PIN 9
 #define LED_R A0
 #define LED_G A1
 #define LED_B A2
-#define BUT_Y 2
-#define BUT_N 3
+#define BUZ A3
+#define G_BUTTON 4
+#define W_BUTTON 5
+#define OK_BUTTON 6
+#define B_BUTTON 2
+#define R_BUTTON 3
+
 //for seral comm.
 char receivedChar;
 boolean newData = false;
 
 MFRC522 mfrc522(SS_PIN , RST_PIN);
 
+void lcdClearLine(int line){
+  lcd.setCursor(0 , line);
+  String blank;
+  for(int i = 1 ; i <= 16 ; i++){
+    blank += " ";
+  }
+  lcd.print(blank);
+}
+
+void lcdPrint(int line , String text){
+    lcdClearLine(line);
+
+  lcd.setCursor(0 , line);
+
+  lcd.print(text);
+}
 
   void ledOn(char color){
     switch(color){
@@ -35,6 +70,7 @@ MFRC522 mfrc522(SS_PIN , RST_PIN);
       break;
       }
   }
+
   void ledOff(char color){
     switch(color){
       case 'R':
@@ -51,6 +87,25 @@ MFRC522 mfrc522(SS_PIN , RST_PIN);
       }
   }
 
+  void buzzerOK(){
+    digitalWrite(BUZ,HIGH);
+    delay(150);
+    digitalWrite(BUZ,LOW);
+    delay(150);
+    digitalWrite(BUZ,HIGH);
+    delay(150);
+    digitalWrite(BUZ,LOW); }
+void buzzerFail(){
+  digitalWrite(BUZ,HIGH);
+  delay(500);
+  digitalWrite(BUZ,LOW);
+    delay(500);
+  digitalWrite(BUZ,HIGH);
+  delay(500);
+  digitalWrite(BUZ,LOW);
+
+}
+
 char recvOneChar() {
     if (Serial.available() > 0) {
         receivedChar = Serial.read();
@@ -66,6 +121,7 @@ void showNewData() {
         newData = false;
     }
 }
+// TODO : Change this function to get HEX UID and store in an array
 unsigned long getCardID(int showCardData = 0){
   /* this function gets the uid of the rfid card
    and returns the uid in unsigned long format */
@@ -102,14 +158,26 @@ void setup() {
   pinMode(LED_R , OUTPUT);
   pinMode(LED_G , OUTPUT);
   pinMode(LED_B , OUTPUT);
-  pinMode(BUT_Y , INPUT);
-  pinMode(BUT_N , INPUT);
+  pinMode(BUZ   , OUTPUT);
+  pinMode(B_BUTTON , INPUT);
+  pinMode(G_BUTTON , INPUT);
+  pinMode(B_BUTTON , INPUT);
+  pinMode(W_BUTTON , INPUT);
+  pinMode(OK_BUTTON , INPUT);
 
   Serial.begin(9600); // Init. serial comm. with the PC
   SPI.begin(); // Init. SPI bus for MFRC522
   mfrc522.PCD_Init(); // Init. MFRC522 card
+
+  lcd.begin(16,2);
+  lcd.setBacklightPin(BACKLIGHT_PIN , POSITIVE);
+  lcd.setBacklight(HIGH);
+  lcd.home();
+  lcdPrint(0 , "- ELECTION 18' -");
+  lcdPrint(1 , "Waiting for Card ");
 }
 
+char canVote;
 void loop() {
     // Look for new cards
   if ( ! mfrc522.PICC_IsNewCardPresent() )
@@ -123,20 +191,31 @@ void loop() {
 
   Serial.print(cardUID);
   Serial.print("\n");
-  char canVote = ' ';
-  while(canVote == ' '){
+  //char canVote = ' ';
+  while(1){
+
+    canVote = '0';
     canVote = recvOneChar();
+
     if(canVote == 'Y'){
-      ledOn('G');
-      getVote();
-      break;
+      lcdPrint(0 , " USE BUTTONS TO ");
+      lcdPrint(1 , " SELECT A PARTY ");
+     ledOn('G');
+     buzzerOK();
+     getVote();
+     canVote = 'N';
+     break;
     }
+
     else if(canVote == 'N'){
-      ledOn('R');
-      break;
-    }
+     ledOn('R');
+     buzzerFail();
+     ledOff('R');
+     break;
+   }
+
     else
-    continue;
+     continue;
   }
 
 
@@ -144,18 +223,101 @@ void loop() {
 
 
 
+canVote = '0';
+}
+bool confirmSelection(String vote , int pin){
+
+  String text = vote + "  -> CONFIRM";
+  String text2 = "BLACK -> CANCEL";
+  lcdPrint(0 , text);
+  lcdPrint(1 , text2);
+  bool voteStatus;
+  while(1){
+    if(digitalRead(pin) == HIGH){
+      lcdPrint(0 , "SUCCESS !");
+      lcdPrint(1 , vote + " SELECTED");
+
+      voteStatus = true;
+      break;
+    }
+    else if(digitalRead(OK_BUTTON)==HIGH){
+      lcdPrint(0 , " VOTE  CANCELLED");
+      lcdPrint(1 , "  SELECT  AGAIN");
+      voteStatus = false;
+      break;
+    }
+    else
+    continue;
+  }
+  return voteStatus;
 
 }
 
 void getVote(){
   while(1){
-    if(digitalRead(BUT_Y) == HIGH){
-      Serial.print("YES");
-      Serial.print('\n');
+    if(digitalRead(R_BUTTON) == HIGH){
+      lcdPrint(0 , "RED SELECTED");
+      lcdPrint(1 , "Please wait...");
+      delay(1000);
+      if(confirmSelection("RED" , R_BUTTON) == true){
+        lcdPrint(0 , "VOTE CONFIRMED");
+        Serial.print("RED");
+       Serial.print('\n');
+              delay(2000);
+       lcdPrint(0 , "");
+       lcdPrint(1 , "");
+        break;
+      }
+      else
+      continue;
     }
-    else if(digitalRead(BUT_N) == HIGH){
-      Serial.print("NO");
-      Serial.print('\n');
+    else if(digitalRead(G_BUTTON) == HIGH){
+      lcdPrint(0 , "GREEN SELECTED");
+      lcdPrint(1 , "Please wait...");
+      delay(1000);
+      if(confirmSelection("GREEN" , G_BUTTON) == true){
+     lcdPrint(0 , "VOTE CONFIRMED");
+        Serial.print("GREEN");
+       Serial.print('\n');
+       delay(2000);
+       lcdPrint(0 , "");
+       lcdPrint(1 , "");
+        break;
+      }
+      else
+      continue;
+    }
+    else if(digitalRead(B_BUTTON) == HIGH){
+      lcdPrint(0 , "BLUE SELECTED");
+      lcdPrint(1 , "Please wait...");
+      delay(1000);
+      if(confirmSelection("BLUE" , B_BUTTON) == true){
+     lcdPrint(0 , "VOTE CONFIRMED");
+        Serial.print("BLUE");
+       Serial.print('\n');
+       delay(2000);
+       lcdPrint(0 , "");
+       lcdPrint(1 , "");
+        break;
+      }
+      else
+      continue;
+    }
+    else if(digitalRead(W_BUTTON) == HIGH){
+      lcdPrint(0 , "WHITE SELECTED");
+      lcdPrint(1 , "Please wait...");
+      delay(1000);
+      if(confirmSelection("WHITE" , W_BUTTON) == true){
+     lcdPrint(0 , "VOTE CONFIRMED");
+        Serial.print("WHITE");
+       Serial.print('\n');
+       delay(2000);
+       lcdPrint(0 , "");
+       lcdPrint(1 , "");
+        break;
+      }
+      else
+      continue;
     }
     else
     continue;

@@ -157,7 +157,7 @@ try:
     if(cmdArg == '-reset'):
         dbs = shelve.open('uid_data')
         dbs['votedUids'] = []
-        dbs['voteCounts'] = {'yes':0,'no':0}
+        dbs['voteCounts'] = {'red':0,'green':0,'blue':0,'white':0}
         dbs.close()
         print "="*10
         print " ** DATABASE IS RESET **"
@@ -169,14 +169,11 @@ try:
         print " > VOTED LIST : " , dbs['votedUids']
         print " > COUNTS     : " , dbs['voteCounts']
         if(len(dbs['votedUids']) == len(dbs['uidsNames'].keys())):
-            yesCount = dbs['voteCounts']['yes']
-            noCount = dbs['voteCounts']['no']
-            if(yesCount > noCount):
-                print " >> YES WIN"
-            elif(noCount > yesCount):
-                print " >> VOTING FINISHED : NO WINS"
-            else:
-                print " >> DRAW"
+            print(" VOTING FINISHED!")
+            redCount = dbs['voteCounts']['red']
+            greenCount = dbs['voteCounts']['green']
+            blueCount = dbs['voteCounts']['blue']
+            whiteCount = dbs['voteCounts']['white']
             sys.exit(0)
         print "="*15
         dbs.close()
@@ -200,10 +197,13 @@ name = dbShelfFile['uidsNames'].values()
 votedUids = dbShelfFile['votedUids']
 
 voteCounts = dbShelfFile['voteCounts']
-yesCount = voteCounts['yes']
-noCount = voteCounts['no']
+redCount = voteCounts['red']
+greenCount = voteCounts['green']
+blueCount = voteCounts['blue']
+whiteCount = voteCounts['white']
 
 dbShelfFile.close()
+
 
 def showGuiMsg(msg , cardUID , voterName):
     master = Tk()
@@ -211,28 +211,31 @@ def showGuiMsg(msg , cardUID , voterName):
     name = voterName
     img = PhotoImage(file=imgPath)
     imgPanel = Label(master , image = img)
+    def canVoteButton():
+        ser.write('Y')
+        master.destroy()
+        master.quit()
+
     if(msg=="voted"):
         nameMsgText = "YOU HAVE ALREADY VOTED\n" + name
+        textBg = 'red'
+        statusImg = PhotoImage(file = 'error.png')
+        okButton = Button(master , text="OK" , command=master.destroy)
+
     elif(msg=="canVote"):
         nameMsgText = "YOU CAN VOTE\n" + name
+        textBg = 'green'
+        statusImg = PhotoImage(file = 'ok.png')
+        okButton = Button(master , text="OK" , command=canVoteButton)
     nameMsg = Message(master , text=nameMsgText , width=550, anchor=CENTER)
-    nameMsg.config(bg='white' , font=( 48 ) , anchor=CENTER)
+    nameMsg.config(bg=textBg ,fg='white', font=( 48 ) , anchor=CENTER )
+    statusImgPanel = Label(master, image = statusImg)
+    statusImgPanel.pack()
     imgPanel.pack()
     nameMsg.pack()
 
-    if(msg=="voted"):
-        # if voter has already voted , show the screen until
-        # OK button is pressed
-        okButton = Button(master , text="OK" , command=master.quit)
-        okButton.pack()
 
-    if(msg=="canVote"):
-        # TODO: this if prevents tk screen blocking the code to run
-        # in the background. It seems to be not working sometimes.
-        # should be improved :
-        # check : https://gordonlesti.com/use-tkinter-without-mainloop/
-        master.after(100,master.quit)
-        # it shows GUI until the person votes
+    okButton.pack()
 
     master.mainloop()
 
@@ -257,30 +260,45 @@ if cardUID in allUids: # if card uid is in defined uids list
     print " WELCOME " , voterName
 
     if cardUID in votedUids: # if uid has already voted
+        ser.write('N') # N : can not vote
         showGuiMsg("voted" , cardUID,voterName)
         #showVotedWarning(cardUID,voterName)
         print " !! YOU HAVE ALREADY VOTED !!"
-        ser.write('N') # N : can not vote
+
 
     else: # if uid hasn't voted yet
         showGuiMsg("canVote" ,cardUID,voterName)
-        ser.write('Y')
+        #ser.write('Y')
         print(" + CAN VOTE")
         print(" * Waiting for vote ...")
-        while(ser.readline() == uidLine): # wait until a new serial data is present
+        while(True):
             voteLine = ser.readline()
             print("voteLine: " , voteLine)
             vote = (voteLine.split('\n'))[0]
             print("VOTE: " + vote)
-            if(vote == 'YES'):
-                print(" >> YES selected")
-                yesCount += 1
+            if(vote == 'RED'):
+                print(" >> RED selected")
+                redCount += 1
                 votedUids.append(cardUID)
-            elif(vote == 'NO'):
-                print(" >> NO selected")
-                noCount += 1
+                break;
+            elif(vote == 'GREEN'):
+                print(" >> GREEN selected")
+                greenCount += 1
                 votedUids.append(cardUID)
+                break;
+            elif(vote == 'BLUE'):
+                print(" >> BLUE selected")
+                blueCount += 1
+                votedUids.append(cardUID)
+                break;
+            elif(vote == 'WHITE'):
+                print(" >> WHITE selected")
+                whiteCount += 1
+                votedUids.append(cardUID)
+                break;
             else:
+                voteLine = ser.readline()
+                continue
                 print(" >> SELECTION IS INVALID")
 
 else: # if card uid is not defined
@@ -289,7 +307,9 @@ else: # if card uid is not defined
 
 dbShelfFile = shelve.open('uid_data')
 dbShelfFile['votedUids'] = votedUids
-voteCounts['yes']=yesCount
-voteCounts['no']=noCount
+voteCounts['red']=redCount
+voteCounts['green']=greenCount
+voteCounts['blue']=blueCount
+voteCounts['white']=whiteCount
 dbShelfFile['voteCounts'] = voteCounts
 dbShelfFile.close()
