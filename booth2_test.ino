@@ -103,7 +103,45 @@ char receivedChars[numChars];
 
   }
 
+  char recvOneChar() {
+    if (Serial.available() > 0) {
+      receivedChar = Serial.read();
+      newData = true;
+      return receivedChar;
+    }
+  }
 
+  void recvWithStartEndMarkers() {
+     static boolean recvInProgress = false;
+     static byte ndx = 0;
+     char startMarker = '<';
+     char endMarker = '>';
+     char rc;
+
+     while (Serial.available() > 0 && newData == false) {
+         rc = Serial.read();
+
+         if (recvInProgress == true) {
+             if (rc != endMarker) {
+                 receivedChars[ndx] = rc;
+                 ndx++;
+                 if (ndx >= numChars) {
+                     ndx = numChars - 1;
+                 }
+             }
+             else {
+                 receivedChars[ndx] = '\0'; // terminate the string
+                 recvInProgress = false;
+                 ndx = 0;
+                 newData = true;
+             }
+         }
+
+         else if (rc == startMarker) {
+             recvInProgress = true;
+         }
+     }
+ }
 
 
   //void printCardName(int cardUID){}
@@ -125,46 +163,51 @@ char receivedChars[numChars];
     lcd.setBacklightPin(BACKLIGHT_PIN , POSITIVE);
     lcd.setBacklight(HIGH);
     lcd.home();
-    lcdPrint(0 , "- ELECTION 18' -");
+    lcd.print(0 , "- ELECTION 18' -");
     lcdPrint(1 , "Waiting for Card ");
   }
-
-
-  char recvOneChar() {
-    if (Serial.available() > 0) {
-      receivedChar = Serial.read();
-      newData = true;
-      return receivedChar;
-    }
-  }
-
-
 
   char canStart;
 
   void loop() {
 
 
-while (true){
+    while (true){
       recvWithStartEndMarkers();
       String message(receivedChars);
-      lcdPrint(0 , receivedChars);
-      if(message == "start" ){
-      receivedChars[0] = 'X';
-          break;
+      //  lcdPrint(0 , receivedChars);
+
+      if ( message == "start" ){
+        // receivedChars[0] = '0';
+         break;
       }
 
-      else
-       continue;
+      else{
+        lcd.setCursor(0,0);
+        lcd.print("- ELECTION 18' -");
+        lcd.setCursor(0,1);
+        lcd.print("Waiting for card");
+        //lcdPrint(0 , "- ELECTION 18' -");
+        //lcdPrint(1 , "Waiting for Card ");
+        continue;
+
+      }
+
     }
 
-  lcdPrint(0 , " USE BUTTONS TO ");
-    lcdPrint(1 , " SELECT A PARTY ");
-    ledOn('G');
-    buzzerOK();
-    getVote();
 
+
+      lcdPrint(0 , " USE BUTTONS TO ");
+      lcdPrint(1 , " SELECT A PARTY ");
+      ledOn('G');
+      buzzerOK();
+      getVote();
+      lcdPrint(0 , "- ELECTION 18' -");
+      lcdPrint(1 , "Waiting for Card ");
+      newData = false;
+      receivedChars[0] = 0;
   }
+
   bool confirmSelection(String vote , int pin) {
 
     String text = vote + "  -> CONFIRM";
@@ -262,35 +305,3 @@ while (true){
         continue;
     }
   }
-
- void recvWithStartEndMarkers() {
-    static boolean recvInProgress = false;
-    static byte ndx = 0;
-    char startMarker = '<';
-    char endMarker = '>';
-    char rc;
-
-    while (Serial.available() > 0 && newData == false) {
-        rc = Serial.read();
-
-        if (recvInProgress == true) {
-            if (rc != endMarker) {
-                receivedChars[ndx] = rc;
-                ndx++;
-                if (ndx >= numChars) {
-                    ndx = numChars - 1;
-                }
-            }
-            else {
-                receivedChars[ndx] = '\0'; // terminate the string
-                recvInProgress = false;
-                ndx = 0;
-                newData = true;
-            }
-        }
-
-        else if (rc == startMarker) {
-            recvInProgress = true;
-        }
-    }
-}

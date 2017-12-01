@@ -122,6 +122,7 @@ void showNewData() {
         newData = false;
     }
 }
+
 // TODO : Change this function to get HEX UID and store in an array
 unsigned long getCardID(int showCardData = 0){
   /* this function gets the uid of the rfid card
@@ -130,30 +131,27 @@ unsigned long getCardID(int showCardData = 0){
   if printing the card data to the serial monitor
   is needed. */
 
-
   unsigned long UID_unsigned;
-   UID_unsigned =  mfrc522.uid.uidByte[0] << 24;
-   UID_unsigned += mfrc522.uid.uidByte[1] << 16;
-   UID_unsigned += mfrc522.uid.uidByte[2] <<  8;
-   UID_unsigned += mfrc522.uid.uidByte[3];
+  UID_unsigned =  mfrc522.uid.uidByte[0] << 24;
+  UID_unsigned += mfrc522.uid.uidByte[1] << 16;
+  UID_unsigned += mfrc522.uid.uidByte[2] <<  8;
+  UID_unsigned += mfrc522.uid.uidByte[3];
 
-   if(showCardData==1){
-   Serial.println("UID Unsigned int");
-   Serial.println(UID_unsigned);
+  if(showCardData==1){
+    Serial.println("UID Unsigned int");
+    Serial.println(UID_unsigned);
+    String UID_string =  (String)UID_unsigned;
+    long UID_LONG=(long)UID_unsigned;
 
-   String UID_string =  (String)UID_unsigned;
-   long UID_LONG=(long)UID_unsigned;
+    Serial.println("UID Long :");
+    Serial.println(UID_LONG);
+    Serial.println("UID String :");
+    Serial.println(UID_string);
+  } // print card data to the serial monitor
 
-   Serial.println("UID Long :");
-   Serial.println(UID_LONG);
-
-   Serial.println("UID String :");
-   Serial.println(UID_string); } // print card data to the serial monitor
-   int UID_int = (int) UID_unsigned;
-   return UID_int; }
-
-
-//void printCardName(int cardUID){}
+  int UID_int = (int) UID_unsigned;
+  return UID_int;
+}
 
 void setup() {
   pinMode(LED_R , OUTPUT);
@@ -186,6 +184,7 @@ void checkForNewCard(){
     Serial.print("R");
     Serial.print(newCardUID);
     Serial.print("\n");
+    delay(1500);
   }
 }
 
@@ -215,10 +214,10 @@ int c; // do nothing
   ledOn('G');
   buzzerOK();
   getVote();
-while(recvOneChar() != 'X'){
-  int ac;
-}
+  while(recvOneChar() != 'X'){
+    int ac;
   }
+}
 
 
 bool confirmSelection(String vote , int pin){
