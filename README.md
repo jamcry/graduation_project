@@ -2,10 +2,10 @@
 Graduation project about **RFID based electronic voting system using Arduino**.
 This project consists of two source files: a Python script *(.py)* and a Arduino script *(.ino)*.
 
-- Checking the received UID from lists in py script to see whether they can vote or not is added and tested. *(10/28)*
-- Py reads uid,vote,name data from shelve database and assign variables. At the end of the voting, it updates the database. *(10/29)*
-- A tkinter based **GUI has been added** to the py script which shows voter's photo and prints whether he can vote or he has already voted. Also sample images (*.png) for the script has been uploaded. *(10/30)*
-
-**What's Next:**
-- Improve sync. with Tkinter window and main code. It seems to be causing problems sometimes.
-- Figure out how to continuosly run the program
+In this project an RFID based electronic voting system which uses the RFID techonology to
+identify the voters is designed and constructed. The project can be divided to 2 parts which are
+computer side and controller side. The main computer stores all the data related to voting and the
+voters, and provides a GUI that shows voter’s name, photo and eligibility to vote. On the
+controller side, which is the electronic voting circuit, microcontroller (Arduino) gets the data and
+sends to the computer via serial. This project also has capability to handle a number of people
+voting simultaneously.
