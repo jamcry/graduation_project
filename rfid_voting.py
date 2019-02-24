@@ -1,295 +1,250 @@
-# 19 July 2014
-
-# in case any of this upsets Python purists it has been converted from an equivalent JRuby program
-
-# this is designed to work with ... ArduinoPC2.ino ...
-
-# the purpose of this program and the associated Arduino program is to demonstrate a system for sending
-#   and receiving data between a PC and an Arduino.
-
-# The key functions are:
-#    sendToArduino(str) which sends the given string to the Arduino. The string may
-#                       contain characters with any of the values 0 to 255
-#
-#    recvFromArduino()  which returns an array.
-#                         The first element contains the number of bytes that the Arduino said it included in
-#                             message. This can be used to check that the full message was received.
-#                         The second element contains the message as a string
-
-
-# the overall process followed by the demo program is as follows
-#   open the serial connection to the Arduino - which causes the Arduino to reset
-#   wait for a message from the Arduino to give it time to reset
-#   loop through a series of test messages
-#      send a message and display it on the PC screen
-#      wait for a reply and display it on the PC
-
-# to facilitate debugging the Arduino code this program interprets any message from the Arduino
-#    with the message length set to 0 as a debug message which is displayed on the PC screen
-
-# the message to be sent to the Arduino starts with < and ends with >
-#    the message content comprises a string, an integer and a float
-#    the numbers are sent as their ascii equivalents
-#    for example <LED1,200,0.2>
-#    this means set the flash interval for LED1 to 200 millisecs
-#      and move the servo to 20% of its range
-
-# receiving a message from the Arduino involves
-#    waiting until the startMarker is detected
-#    saving all subsequent bytes until the end marker is detected
-
-# NOTES
-#       this program does not include any timeouts to deal with delays in communication
-#
-#       for simplicity the program does NOT search for the comm port - the user must modify the
-#         code to include the correct reference.
-#         search for the lines
-#               serPort = "/dev/ttyS80"
-#               baudRate = 9600
-#               ser = serial.Serial(serPort, baudRate)
-#
-
-
-#=====================================
-
-#  Function Definitions
-
-#=====================================
-
-def sendToArduino(sendStr):
-  ser.write(sendStr)
-
-
-#======================================
-
-def recvFromArduino():
-  global startMarker, endMarker
-
-  ck = ""
-  x = "z" # any value that is not an end- or startMarker
-  byteCount = -1 # to allow for the fact that the last increment will be one too many
-
-  # wait for the start character
-  while  ord(x) != startMarker:
-    x = ser.read()
-
-  # save data until the end marker is found
-  while ord(x) != endMarker:
-    if ord(x) != startMarker:
-      ck = ck + x
-      byteCount += 1
-    x = ser.read()
-
-  return(ck)
-
-
-#============================
-
-def waitForArduino():
-
-   # wait until the Arduino sends 'Arduino Ready' - allows time for Arduino reset
-   # it also ensures that any bytes left over from a previous message are discarded
-
-    global startMarker, endMarker
-
-    msg = ""
-    while msg.find("Arduino is ready") == -1:
-
-      while ser.inWaiting() == 0:
-        pass
-
-      msg = recvFromArduino()
-
-      print msg
-      print
-
-#======================================
-
-def runTest(td):
-  numLoops = len(td)
-  waitingForReply = False
-
-  n = 0
-  while n < numLoops:
-
-    teststr = td[n]
-
-    if waitingForReply == False:
-      sendToArduino(teststr)
-      print "Sent from PC -- LOOP NUM " + str(n) + " TEST STR " + teststr
-      waitingForReply = True
-
-    if waitingForReply == True:
-
-      while ser.inWaiting() == 0:
-        pass
-
-      dataRecvd = recvFromArduino()
-      print "Reply Received  " + dataRecvd
-      n += 1
-      waitingForReply = False
-
-      print "==========="
-
-    time.sleep(5)
-
-
-#======================================
-
-# THE DEMO PROGRAM STARTS HERE
-
-#======================================
-
-import serial
+import serial # serial module is used to communicate with the serial port
 import time
-import shelve # shelve module is used to read variables from saved database in hdd
-import os # for future uses to check if path is correct etc.
+import shelve # shelve module is used to read data from the database
 import sys
-from Tkinter import *
+from Tkinter import * # Tkinter is used for GUI
 import tkMessageBox
-import thread
-
-# this script can be called as 'python uid-comm.py -reset'
-
-# to reset database (THIS REMOVES ALL SAVED DATA !)
 try:
     cmdArg = str(sys.argv[1])
     if(cmdArg == '-reset'):
+        # this script can be called with the arg. '-reset'
+        # to reset database (THIS REMOVES ALL SAVED DATA !)
         dbs = shelve.open('uid_data')
         dbs['votedUids'] = []
-        dbs['voteCounts'] = {'yes':0,'no':0}
+        dbs['voteCounts'] = {'red':0,'green':0,'blue':0,'blank':0}
         dbs.close()
         print "="*10
         print " ** DATABASE IS RESET **"
         print "="*10
         print "arg 1 : " , str(sys.argv[1])
     elif(cmdArg == '-showDb'):
+        # also can be called with the arg. '-showDb'
+        # to see the results
         dbs = shelve.open('uid_data')
         print "="*15
         print " > VOTED LIST : " , dbs['votedUids']
-        print " > COUNTS     : " , dbs['voteCounts']
+        print " > COUNTS : " , dbs['voteCounts']
+        if(len(dbs['votedUids']) != len(dbs['uidsNames'].keys())):
+            numOfVoted = len(dbs['votedUids'])
+            numOfVoters = len(dbs['uidsNames'])
+            print numOfVoted , "voters have voted out of " , numOfVoters
+            percentOfAttendance = (numOfVoted * 100 / numOfVoters)
+            print percentOfAttendance , "percent of the voters has voted."
+            print (100-percentOfAttendance) , "percent of the voters didn't attend."
         if(len(dbs['votedUids']) == len(dbs['uidsNames'].keys())):
-            yesCount = dbs['voteCounts']['yes']
-            noCount = dbs['voteCounts']['no']
-            if(yesCount > noCount):
-                print " >> YES WIN"
-            elif(noCount > yesCount):
-                print " >> VOTING FINISHED : NO WINS"
-            else:
-                print " >> DRAW"
+            print(" VOTING FINISHED!")
+            redCount = dbs['voteCounts']['red']
+            greenCount = dbs['voteCounts']['green']
+            blueCount = dbs['voteCounts']['blue']
+            blankCount = dbs['voteCounts']['blank']
             sys.exit(0)
-        print "="*15
-        dbs.close()
+    print "="*15
+    dbs.close()
 except IndexError:
-    x=0
-        # do nothing if no argument is written in commandline
+    x = 0; # do nothing if no argument is written in commandline
 
+# NOTE the user must ensure that the serial port and baudrate are correct
+serialPort = "/dev/ttyUSB0"
+serialPort2 = "/dev/ttyUSB1"
+baudRate = 9600
+baudRate2 = 19200
 
-dbShelfFile = shelve.open('uid_data')
-# if all registered uids has voted, exit program
-if(len(dbShelfFile['votedUids']) == len(dbShelfFile['uidsNames'].keys())):
-    print("VOTING HAS FINISHED")
-    sys.exit(0)
+ser1 = serial.Serial(serialPort, baudRate)
+# ser1(ttyUSB0) should be connect to the main circuit with the RFID reader
+# or ser1 and ser2 must be swapped
+ser2 = serial.Serial(serialPort2 , baudRate2)
+print "Serial port " + serialPort + " opened Baudrate " + str(baudRate)
+print "Serial port " + serialPort2 + " opened Baudrate " + str(baudRate2)
 
-uidNameDict = dbShelfFile['uidsNames']
-allUids = uidNameDict.keys()
-print( " == ALL UIDS : " , allUids)
-
-name = dbShelfFile['uidsNames'].values()
-
-votedUids = dbShelfFile['votedUids']
-
-voteCounts = dbShelfFile['voteCounts']
-yesCount = voteCounts['yes']
-noCount = voteCounts['no']
-
-dbShelfFile.close()
-
-def showGuiMsg(msg , cardUID , voterName):
+votingUids = [] #this list stores the UIDs that are currently voting
+booth1available = True
+booth2available = True
+booth1Uid = 0
+booth2Uid = 0
+def showGuiMsg(msg , booth , cardUID , voterName):
+    #this fn. shows a GUI message according to
+    #the status of the voter such as 'YOU CAN VOTE' , 'YOU ALREADY VOTED' etc.
     master = Tk()
     imgPath = str(cardUID) + ".png"
     name = voterName
     img = PhotoImage(file=imgPath)
     imgPanel = Label(master , image = img)
+    def canVoteButton():
+        #if the person is eligible to vote
+        #print the starting command to the serial of the available circuit
+        if(booth == "booth1"):
+            ser1.write('S')
+        elif(booth == "booth2"):
+            ser2.write('<start>')
+            print "ser2 write start"
+        master.destroy()
+        master.quit()
     if(msg=="voted"):
+        #if the person has already voted, shows an error message
         nameMsgText = "YOU HAVE ALREADY VOTED\n" + name
+        textBg = 'red'
+        statusImg = PhotoImage(file = 'error.png')
+        okButton = Button(master , text="OK" , command=master.destroy)
     elif(msg=="canVote"):
         nameMsgText = "YOU CAN VOTE\n" + name
+        textBg = 'green'
+        statusImg = PhotoImage(file = 'ok.png')
+        okButton = Button(master , text="OK" , command=canVoteButton)
+    elif(msg=="occupied"):
+        #if all of the booths are occupied, show a warning
+        nameMsgText = "ALL BOOTHS ARE OCCUPIED NOW!\nPLEASE WAIT!"
+        textBg = 'blue'
+        statusImg = PhotoImage(file = 'error.png')
+        okButton = Button(master , text="OK" , command=master.destroy)
+    boothMsgText = " "
+    #print which booth is available (if any)
+    if(booth == "booth1"):
+        boothMsgText = "GO TO BOOTH 1"
+    elif(booth == "booth2"):
+        boothMsgText = "GO TO BOOTH 2"
+
+    boothMsg = Message(master , text=boothMsgText , width =550 , anchor = CENTER)
     nameMsg = Message(master , text=nameMsgText , width=550, anchor=CENTER)
-    nameMsg.config(bg='white' , font=( 48 ) , anchor=CENTER)
+    nameMsg.config(bg=textBg ,fg='white', font=( 48 ) , anchor=CENTER )
+    statusImgPanel = Label(master, image = statusImg)
+    statusImgPanel.pack()
     imgPanel.pack()
+    boothMsg.pack()
     nameMsg.pack()
-
-    if(msg=="voted"):
-        # if voter has already voted , show the screen until
-        # OK button is pressed
-        okButton = Button(master , text="OK" , command=master.quit)
-        okButton.pack()
-
-    if(msg=="canVote"):
-        # TODO: this if prevents tk screen blocking the code to run
-        # in the background. It seems to be not working sometimes.
-        # should be improved :
-        # check : https://gordonlesti.com/use-tkinter-without-mainloop/
-        master.after(100,master.quit)
-        # it shows GUI until the person votes
-
+    okButton.pack()
     master.mainloop()
 
+def startBooth(cardUID , voterName):
+    #direct voter to the available booth(if any)
+    #and start the voting circuit
+    global booth1available , booth2available , booth1Uid , booth2Uid
+    if(booth1available):
+        booth1Uid = cardUID
+        showGuiMsg("canVote" , "booth1" , booth1Uid , voterName)
+        print " >> GO BOOTH 1"
+        print "="*15
+        booth1available = False #mark booth1 as occupied
+        votingUids.append( cardUID ) #add card UID to currently voting UIDs list
+    
+    elif(booth2available):
+        booth2Uid = cardUID
+        showGuiMsg("canVote" , "booth2" , booth2Uid , voterName)
+        print " >> GO BOOTH 2"
+        print "="*15
+        booth2available = False
+        votingUids.append( cardUID )
+    
+    else: #if no booths are available
+        print("Both booths are occupied")
+        showGuiMsg("occupied" , "x" , cardUID , "test")
+        print "="*15
 
-# NOTE the user must ensure that the serial port and baudrate are correct
-serialPort = "/dev/ttyUSB0"
-baudRate = 9600
-ser = serial.Serial(serialPort, baudRate)
-print "Serial port " + serialPort + " opened  Baudrate " + str(baudRate)
-#startMarker = 60
-#endMarker = 62
-#waitForArduino() -- used for sending
-
-uidLine = ser.readline()
-print ("-" + uidLine + "-")
-cardUID = int((uidLine.split("\n"))[0])
-print "waited for arduino"
-print " >> CARD UID:" , cardUID
-
-if cardUID in allUids: # if card uid is in defined uids list
-    voterName = uidNameDict[cardUID]
-    print " WELCOME " , voterName
-
-    if cardUID in votedUids: # if uid has already voted
-        showGuiMsg("voted" , cardUID,voterName)
-        #showVotedWarning(cardUID,voterName)
-        print " !! YOU HAVE ALREADY VOTED !!"
-        ser.write('N') # N : can not vote
-
-    else: # if uid hasn't voted yet
-        showGuiMsg("canVote" ,cardUID,voterName)
-        ser.write('Y')
-        print(" + CAN VOTE")
-        print(" * Waiting for vote ...")
-        while(ser.readline() == uidLine): # wait until a new serial data is present
-            voteLine = ser.readline()
-            print("voteLine: " , voteLine)
-            vote = (voteLine.split('\n'))[0]
-            print("VOTE: " + vote)
-            if(vote == 'YES'):
-                print(" >> YES selected")
-                yesCount += 1
-                votedUids.append(cardUID)
-            elif(vote == 'NO'):
-                print(" >> NO selected")
-                noCount += 1
-                votedUids.append(cardUID)
+def checkForNewCard():
+    global booth1available , booth2available , booth1Uid , booth2Uid
+    if(ser1.inWaiting()): #if there is new data in the serial
+        serLine = ser1.readline() #read the line
+        if(serLine[0] == 'R'): #if the fetched line is uid
+                #'R' is a marker to show that the line contains Rfid card UID number
+                cardUidLine = serLine.split("\n")[0]
+                cardUID = int(cardUidLine[1::])
+                print " >> CARD UID:" , cardUID
+            if(cardUID in allUids):
+                voterName = uidNameDict[cardUID]
+                print " >> NAME : " , voterName
+                if(cardUID in votingUids): #if the voter is currently voting
+                    print "YOU ARE VOTING NOW."
+                    print "="*15
+                elif(cardUID in votedUids): #if the voter has already voted
+                    print "YOU HAVE ALREADY VOTED"
+                    showGuiMsg("voted" ,"x" , cardUID , voterName)
+                    print "="*15
+                elif(cardUID not in votingUids and cardUID not in votedUids):
+                #if the voter is eligible to vote
+                print "START VOTING " , voterName
+                startBooth(cardUID , voterName)
+                print "="*15
             else:
-                print(" >> SELECTION IS INVALID")
+                c = 0 #do nothing
+def logVote(booth, vote):
+    #this fn. increments the vote counts according to
+    #the selected option
+    global redCount , greenCount , blueCount , blankCount
+    if(vote == 'RED'):
+        print(" >> RED selectedx")
+        redCount += 1
+    elif(vote == 'GREEN'):
+        print(" >> GREEN selected")
+        greenCount += 1
+    elif(vote == 'BLUE'):
+        print(" >> BLUE selected")
+        blueCount += 1
+    elif(vote == 'BLANK'):
+        print(" >> BLANK selected")
+        blankCount += 1
+    else:
+        print(" >> SELECTION IS INVALID")
 
-else: # if card uid is not defined
-    ser.write('E')
-    print("error")
+def checkForVote():
+    #this fn. checks the serial for new
+    #vote data
+    global booth1available , booth2available
+    if(ser1.inWaiting()): #if new data is waiting in ser1
+        serLine1 = ser1.readline()
+        if(serLine1[0] == 'V'): # if the fetched line is vote
+            #'V' is a marker to show that the line contains Vote data
+            voteLine1 = serLine1.split("\n")[0]
+            vote1 = voteLine1[1::]
+            print " >> VOTE 1: " , vote1
+            logVote(booth1available , vote1)
+            print "="*15
+            votedUids.append(booth1Uid)
+            votingUids.remove(booth1Uid)
+            booth1available = True
+            ser1.write('X') # tell arduino to restart
+    elif(ser2.inWaiting()): #if new data is waiting in ser2
+        serLine2 = ser2.readline()
+        if(serLine2[0] == 'V'): # if the fetched line is vote
+            voteLine2 = serLine2.split("\n")[0]
+            vote2 = voteLine2[1::]
+            print " >> VOTE 2: " , vote2
+            logVote(booth2Uid , vote2)
+            print "="*15
+            votedUids.append(booth2Uid)
+            votingUids.remove(booth2Uid)
+            booth2available = True
+            #ser2.write('X') # tell arduino to restart
+    else:
+        x = 0 # do nothing
 
-dbShelfFile = shelve.open('uid_data')
-dbShelfFile['votedUids'] = votedUids
-voteCounts['yes']=yesCount
-voteCounts['no']=noCount
-dbShelfFile['voteCounts'] = voteCounts
-dbShelfFile.close()
+while(1):
+    #start an infinite loop to continuously check for new data
+    #the program will continue until terminated by the user
+    dbShelfFile = shelve.open('uid_data') # open the database(shelve)
+    
+    #get the data and store them in variables
+    uidNameDict = dbShelfFile['uidsNames']
+    allUids = uidNameDict.keys()
+    
+    name = dbShelfFile['uidsNames'].values()
+    votedUids = dbShelfFile['votedUids']
+    voteCounts = dbShelfFile['voteCounts']
+    redCount = voteCounts['red']
+    greenCount = voteCounts['green']
+    blueCount = voteCounts['blue']
+    blankCount = voteCounts['blank']
+    
+    dbShelfFile.close()
+    
+    #main loop
+    checkForNewCard() #check if a new card is present
+    checkForVote() #get the vote data
+    
+    #write new data to the database
+    dbShelfFile = shelve.open('uid_data')
+    dbShelfFile['votedUids'] = votedUids
+    voteCounts['red']=redCount
+    voteCounts['green']=greenCount
+    voteCounts['blue']=blueCount
+    voteCounts['blank']=blankCount
+    dbShelfFile['voteCounts'] = voteCounts
+    dbShelfFile.close() #close the database
